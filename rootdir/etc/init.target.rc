@@ -43,6 +43,7 @@ on init
 
 on fs
     mount_all /vendor/etc/fstab.qcom --early
+    swapon_all /vendor/etc/fstab.qcom
 
     restorecon_recursive /persist
     mkdir /persist/data 0700 system system
@@ -69,6 +70,13 @@ on late-fs
     start configstore-hal-1-0
     start gralloc-2-0
 
+    # Boot-time fs tuning
+    write /sys/block/sda/queue/iostats 0
+    write /sys/block/sda/queue/nr_requests 256
+    write /sys/block/sde/queue/iostats 0
+    write /sys/block/sde/queue/nr_requests 256
+    setprop sys.io.scheduler "cfq"
+
     mount_all /vendor/etc/fstab.qcom --late
 
 on post-fs-data
@@ -81,15 +89,12 @@ on post-fs-data
     mkdir /data/thermal 0771 system system
     mkdir /data/thermal/config 0771 system system
 
-on property:sys.post_boot.parsed=1
-    swapon_all /vendor/etc/fstab.qcom
-    start perfd
-
 service per_mgr /vendor/bin/pm-service
     class core
     user system
     group system
     ioprio rt 4
+    shutdown critical
 
 service per_proxy /vendor/bin/pm-proxy
     class core
@@ -100,13 +105,14 @@ service per_proxy /vendor/bin/pm-proxy
 on property:init.svc.per_mgr=running
     start per_proxy
 
-on property:sys.shutdown.requested=*
+on property:sys.powerctl=*
     stop per_proxy
 
 service qseecomd /vendor/bin/qseecomd
     class core
     user root
     group root
+    shutdown critical
 
 service thermal-engine /vendor/bin/thermal-engine -T
     class main
